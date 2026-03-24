@@ -133,8 +133,8 @@ with st.sidebar:
     st.markdown("### Seleccione el Modelo")
     nombre_modelo_sel = st.selectbox(
         "Modelo Predictivo",
-        list(modelos_raw.keys()),
-        help="Cada modelo utiliza un algoritmo diferente. El Árbol de Decisión y la Red Neuronal suelen ser los más precisos en este dataset."
+        ["Ensamble de modelos"] + list(modelos_raw.keys()),
+        help="El Ensamble combina las predicciones de los 3 mejores modelos (MLP, SVM y Árbol de Decisión) para una mayor robustez clínica."
     )
     
     st.markdown("---")
@@ -150,28 +150,52 @@ entrada = np.array([[edad, ckmb_log, troponina_log]])
 entrada_scaled = scaler.transform(entrada)
 
 # Definir Pestañas Principales
-tab1, tab2, tab3 = st.tabs(["🎯 Diagnóstico", "🔬 Exploración y Ciencia", "📊 Evaluación Técnica"])
+tab1, tab2, tab3 = st.tabs(["Diagnóstico", "Exploración y Ciencia", "Evaluación Técnica"])
 
 with tab1:
     col_res, col_gauge = st.columns([1, 1])
     
-    modelo = modelos[nombre_modelo_sel]
-    pred = modelo.predict(entrada_scaled)[0]
-    try:
-        proba = modelo.predict_proba(entrada_scaled)[0]
-        prob_percent = proba[1] * 100
-    except:
-        proba = None
-        prob_percent = None
+    # Lógica de predicción
+    if "Ensamble" in nombre_modelo_sel:
+        # Los 3 mejores modelos para el ensamble
+        nombres_top = ['Red Neuronal MLP', 'SVM', 'Árbol de Decisión']
+        preds_ens = []
+        probas_ens = []
+        
+        for n in nombres_top:
+            if n in modelos:
+                m = modelos[n]
+                preds_ens.append(m.predict(entrada_scaled)[0])
+                try:
+                    probas_ens.append(m.predict_proba(entrada_scaled)[0][1])
+                except:
+                    pass
+        
+        # Promedio simple (Soft Voting simulado)
+        prob_avg = np.mean(probas_ens) if probas_ens else (np.mean(preds_ens) if preds_ens else 0)
+        pred = 1 if prob_avg >= 0.5 else 0
+        prob_percent = prob_avg * 100
+        proba = [1 - prob_avg, prob_avg] # Para compatibilidad de visualización
+        info_modelo = "Consenso de MLP, SVM y Árbol de Decisión."
+    else:
+        modelo = modelos[nombre_modelo_sel]
+        pred = modelo.predict(entrada_scaled)[0]
+        info_modelo = f"Modelo individual: **{nombre_modelo_sel}**"
+        try:
+            proba = modelo.predict_proba(entrada_scaled)[0]
+            prob_percent = proba[1] * 100
+        except:
+            proba = None
+            prob_percent = None
 
     with col_res:
-        st.subheader(f"Resultado: {'🚩 Positivo' if pred == 1 else '✅ Negativo'}")
+        st.subheader(f"Resultado: {'Positivo' if pred == 1 else 'Negativo'}")
         if pred == 1:
             st.error("Se detecta un **alto riesgo** de evento cardiaco basado en los biomarcadores proporcionados.")
         else:
             st.success("Se detecta un **bajo riesgo** de evento cardiaco actual.")
             
-        st.info(f"Modelo utilizado: **{nombre_modelo_sel}**")
+        st.info(info_modelo)
 
     with col_gauge:
         if proba is not None:
@@ -191,7 +215,7 @@ with tab1:
             st.plotly_chart(fig_prob, use_container_width=True)
 
 with tab2:
-    st.header("🧬 Justificación Científica y Datos")
+    st.header("Justificación Científica y Datos")
     
     st.markdown("""
     ### ¿Por qué estas variables?
@@ -214,7 +238,7 @@ with tab2:
     st.caption("Nota: Los valores están escalados para comparación visual. Referencia clínica: Troponina < 0.04 ng/mL es usualmente normal.")
 
 with tab3:
-    st.header("📈 Rendimiento del Sistema")
+    st.header("Rendimiento del Sistema")
     
     # Botón para disparar análisis técnico (ya que consume recursos)
     if st.checkbox("Ejecutar Análisis Técnico Completo"):
