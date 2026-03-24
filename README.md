@@ -1,14 +1,14 @@
-# Predicción de Riesgo de Ataque Cardíaco 🫀
+# Predicción de Riesgo de Ataque Cardíaco
 
 Este proyecto utiliza técnicas de **Aprendizaje Automático (Machine Learning)** para predecir el riesgo de un ataque cardíaco en pacientes basándose en biomarcadores clínicos. La aplicación ha sido desarrollada con **Streamlit** para proporcionar una interfaz interactiva y fácil de usar para profesionales de la salud.
 
-## 🚀 Características
+## Características
 - **Multimodelo**: Compara predicciones de 6 modelos diferentes (Regresión Logística, Naive Bayes, KNN, Árbol de Decisión, SVM y Redes Neuronales).
 - **Visualización Interactiva**: Gráficos de probabilidad (Pie charts), curvas ROC y matrices de confusión.
 - **Métricas de Evaluación**: Análisis detallado de Accuracy, Precision, Recall, F1-score, F0.5 y F2-score.
 - **Análisis de Rendimiento**: Comparativa del tiempo de inferencia entre modelos.
 
-## 🔬 Metodología y Justificación Científica
+## Metodología y Justificación Científica
 
 Para este proyecto (V2), se seleccionaron variables críticas basadas en su relevancia clínica:
 
@@ -22,7 +22,7 @@ Para este proyecto (V2), se seleccionaron variables críticas basadas en su rele
 
 ---
 
-## 📊 Visualización del Rendimiento
+## Visualización del Rendimiento
 
 A continuación se presentan las métricas clave obtenidas durante la fase de validación de los modelos.
 
@@ -37,7 +37,7 @@ A continuación se presentan las métricas clave obtenidas durante la fase de va
 
 ---
 
-## 🛠️ Estructura del Proyecto
+## Estructura del Proyecto
 ```text
 ├── app/                # Código fuente de la aplicación Streamlit
 │   └── main.py
@@ -49,7 +49,7 @@ A continuación se presentan las métricas clave obtenidas durante la fase de va
 └── README.md           # Documentación
 ```
 
-## ⚙️ Instalación y Ejecución Local
+## Instalación y Ejecución Local
 
 1. **Clonar el repositorio**:
    ```bash
