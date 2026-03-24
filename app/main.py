@@ -27,7 +27,7 @@ def safe_load(filename):
     if os.path.exists(path):
         return joblib.load(path)
     else:
-        st.error(f"❌ No se encontró el archivo: {filename}")
+        st.error(f"No se encontró el archivo, verifique la ruta: {filename}")
         return None
 
 # Inicializar
