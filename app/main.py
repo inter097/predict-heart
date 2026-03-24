@@ -7,22 +7,9 @@ import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import time
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_curve, auc
 import os
 import sys
-
-
-import numpy as np
-import pandas as pd
-import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-import time
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
-from sklearn.metrics import roc_curve, auc
-# import scaler as scaler
 
 
 # Cargar modelos
@@ -138,275 +125,172 @@ with st.expander("Mostrar mas información", expanded=False):
 st.markdown("### Uso de la aplicación:")
 st.markdown("")
 st.markdown("")
-if not mostrar_matriz:
-    st.markdown("**Nota:** Las matrices de confusión no están disponibles porque no se cargaron los datos de test.")
-
-# Inputs del usuario
-edad = st.number_input("**Edad**", min_value=0, max_value=120, value=45)
-ckmb = st.number_input("**CK-MB**", value=2.86, min_value=0.00, format="%.2f")
-troponina = st.number_input("**Troponina**", value=0.003, min_value=0.000, format="%.3f", step=0.001)
-
-st.markdown("---")
-st.subheader("Eliga el modelo a utilizar")
+# Sidebar para configuración global
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/822/822118.png", width=100)
+    st.title("Configuración")
+    
+    st.markdown("### Seleccione el Modelo")
+    nombre_modelo_sel = st.selectbox(
+        "Modelo Predictivo",
+        list(modelos_raw.keys()),
+        help="Cada modelo utiliza un algoritmo diferente. El Árbol de Decisión y la Red Neuronal suelen ser los más precisos en este dataset."
+    )
+    
+    st.markdown("---")
+    st.markdown("### Datos del Paciente")
+    edad = st.slider("Edad", 0, 120, 45, help="La edad es un factor de riesgo acumulativo importante.")
+    ckmb = st.number_input("CK-MB (U/L)", value=2.86, min_value=0.0, format="%.2f", help="Creatina Quinasa-MB. Valores elevados sugieren daño reciente al músculo cardíaco.")
+    troponina = st.number_input("Troponina (ng/mL)", value=0.003, min_value=0.0, format="%.3f", step=0.001, help="Proteína altamente específica. Es el 'estándar de oro' para detectar infartos.")
 
 # Transformar datos
-if scaler is not None and modelos:
-    ckmb_log = np.log(ckmb + 1e-10)
-    troponina_log = np.log(troponina + 1e-10)
-    entrada = np.array([[edad, ckmb_log, troponina_log]])
-    entrada_scaled = scaler.transform(entrada)
-    # Pestañas por modelo
-    tabs = st.tabs(list(modelos.keys()))
-else:
-    st.warning("⚠️ La predicción no está disponible porque el escalador o los modelos no se cargaron correctamente.")
-    st.stop()
+ckmb_log = np.log(ckmb + 1e-10)
+troponina_log = np.log(troponina + 1e-10)
+entrada = np.array([[edad, ckmb_log, troponina_log]])
+entrada_scaled = scaler.transform(entrada)
 
-for idx, nombre_modelo in enumerate(modelos.keys()):
-    with tabs[idx]:
-        modelo = modelos[nombre_modelo]
-        pred = modelo.predict(entrada_scaled)[0]
+# Definir Pestañas Principales
+tab1, tab2, tab3 = st.tabs(["🎯 Diagnóstico", "🔬 Exploración y Ciencia", "📊 Evaluación Técnica"])
 
-        st.markdown("")
-        resultado = "Positivo" if pred == 1 else "Negativo"
-        st.markdown(f"### {nombre_modelo} &nbsp;&nbsp;|&nbsp;&nbsp; Resultado → **{resultado}**")
-
-
-        try:
-            proba = modelo.predict_proba(entrada_scaled)[0]
-            proba = [round(p, 2) for p in proba] # redondear a 2 decimales
-        except:
-            st.info("Este modelo no proporciona probabilidades (`predict_proba`).")
-
-        if mostrar_matriz:
-            y_pred = modelo.predict(X_test)
-            cm = confusion_matrix(y_test, y_pred)
-
-####################################################################
-# muestra la matriz de confursión
-            with st.container():
-                # Fila completa (una línea visual)
-                col1, col2, col3 = st.columns([1, 3,1])  # Ajusta proporción según gusto
-
-               
-
-
-####################################################################
-# grafico de pastel con la probabilidad de predicción
-
-                with col2:
-                    try:
-                        fig_plotly = go.Figure(data=[go.Pie(
-                            labels=['Positivo','Negativo'],
-                            values=[proba[1], proba[0]],
-                            marker=dict(colors=['c62828' ,'e0f7fa']),
-                            sort=False
-                        )])
-                        fig_plotly.update_layout(
-                            margin=dict(l=0, r=0, t=0, b=0),
-                            showlegend=True
-                        )
-                        st.plotly_chart(fig_plotly, use_container_width=True, key=f"plotly_{nombre_modelo}")
-                    except Exception as e:
-                        st.error(f"Error al generar el gráfico: {e}")
-
-
-st.markdown("---")
-
-
-st.subheader("Opciones de visualización")
-
-opcion_vista = st.radio(
-    "",
-    [
-        "Resumen de métricas",
-        "Curvas ROC",
-        "Matrices de confusión",
-        "Tiempo de inferencia"
-    ],horizontal=True,
-    index=0
-)
-
-
-######################################################################
-# Resumen de métricas
-
-if mostrar_matriz:
-    resumen = []
-    tiempos = {}
-    matrices = {}
-    roc_data = {}
-
-    for nombre, modelo in modelos.items():
-        try:
-            start = time.perf_counter()
-            y_pred = modelo.predict(X_test)
-            tiempos[nombre] = time.perf_counter() - start
-
-            # Para curva ROC
-            if hasattr(modelo, "predict_proba"):
-                y_score = modelo.predict_proba(X_test)[:, 1]
-            elif hasattr(modelo, "decision_function"):
-                y_score = modelo.decision_function(X_test)
-            else:
-                y_score = None
-
-            if y_score is not None:
-                fpr, tpr, _ = roc_curve(y_test, y_score)
-                roc_auc = auc(fpr, tpr)
-                roc_data[nombre] = (fpr, tpr, roc_auc)
-
-            # Calcular métricas extendidas
-            prec = precision_score(y_test, y_pred)
-            rec = recall_score(y_test, y_pred)
-
-            f1 = f1_score(y_test, y_pred)
-            f2 = (5 * prec * rec) / ((4 * prec) + rec) if (4 * prec + rec) != 0 else 0
-            f05 = (1.25 * prec * rec) / ((0.25 * prec) + rec) if (0.25 * prec + rec) != 0 else 0
-
-            resumen.append({
-                "Modelo": nombre,
-                "Accuracy": accuracy_score(y_test, y_pred),
-                "Precision": prec,
-                "Recall": rec,
-                "F1-score": f1,
-                "F0.5-score": f05,
-                "F2-score": f2
-            })
-
-            matrices[nombre] = confusion_matrix(y_test, y_pred)
-        except:
-            continue
-
-    # Ordenar resumen por Accuracy descendente
-    resumen_ordenado = sorted(resumen, key=lambda x: x["Accuracy"], reverse=True)
-
-    # guardar el orden de los modelos
-    orden_modelos = [r["Modelo"] for r in resumen_ordenado]
-
-    # reordenar los diccionarios de tiempos, matrices y roc_data
-    matrices_ordenadas = {nombre: matrices[nombre] for nombre in orden_modelos}
-
-    df_resumen_ordenado = pd.DataFrame(resumen_ordenado).set_index("Modelo")
-
-    if opcion_vista == "Resumen de métricas":
-        st.markdown("**Escala de color:** rendimiento bajo (claro) → rendimiento alto (oscuro)")
-        st.dataframe(
-            df_resumen_ordenado.style
-                .format("{:.2%}")
-                .background_gradient(cmap='Blues', axis=0)
-        )
-
-        st.markdown("-----------------------")
-
-        st.markdown("**Tabla de Métricas de Evaluación**")
-
-        st.markdown("""
-        | **Métrica**   | **Descripción**                                                       | **Fórmula**                                               |
-        |---------------|------------------------------------------------------------------------|------------------------------------------------------------|
-        | Accuracy      | Porcentaje total de predicciones correctas.                          | $\\frac{TP + TN}{TP + TN + FP + FN}$                      |
-        | Precision     | Proporción de positivos predichos que son correctos.                 | $\\frac{TP}{TP + FP}$                                     |
-        | Recall        | Proporción de positivos reales correctamente identificados.          | $\\frac{TP}{TP + FN}$                                     |
-        | F1-score      | Promedio armónico equilibrado entre precisión y recall.              | $2\\cdot \\frac{\\text{P} \\cdot \\text{R}}{\\text{P} + \\text{R}}$|
-        | F0.5-score    | Promedio armónico con mayor peso en la precisión.                    | $1.25\\cdot \\frac{\\text{P} \\cdot \\text{R}}{0.25 \\cdot \\text{P} + \\text{R}}$ |
-        | F2-score      | Promedio armónico con mayor peso en el recall.                       | $5\\cdot \\frac{\\text{P} \\cdot \\text{R}}{4 \\cdot \\text{P} + \\text{R}}$ |
-        """, unsafe_allow_html=False)
-
-
-
-######################################################################
-    # Curvas ROC
-    elif opcion_vista == "Curvas ROC":
-        fig, ax = plt.subplots()
-
-        roc_data_ordenado = sorted(roc_data.items(), key=lambda x: x[1][2], reverse=True)
-        
-        for nombre, (fpr, tpr, roc_auc) in roc_data_ordenado:
-            ax.plot(fpr, tpr, label=f'{nombre} (AUC = {roc_auc:.2f})')
-
-        ax.plot([0, 1], [0, 1], 'k--', label="Random")
-        ax.set_xlabel('Tasa de Falsos Positivos (FPR)')
-        ax.set_ylabel('Tasa de Verdaderos Positivos (TPR)')
-        ax.set_title('Curvas ROC')
-        ax.legend(loc='lower right')
-        st.pyplot(fig)
-
-        st.markdown("Las curvas ROC muestran la relación entre la tasa de verdaderos positivos y la tasa de falsos positivos.")
-        st.markdown("**AUC:** área bajo la curva, indica el rendimiento del modelo. Un AUC de 1.0 es perfecto, 0.5 es aleatorio.")
-
-######################################################################
-    # Matrices de confusión
-
-    elif opcion_vista == "Matrices de confusión":   
-        st.markdown("Las matrices de confusión muestran la relación entre las predicciones y los valores reales.")
-        # Mostrar 3 por matrices de confusión en una fila
-        
-        modelos_lista = list(matrices_ordenadas.items())
-
-        for i in range(0, len(modelos_lista), 3):
-            cols = st.columns(3)
-            for j in range(3):
-                if i + j < len(modelos_lista):
-                    nombre, cm = modelos_lista[i + j]
-                    with cols[j]:
-                        fig, ax = plt.subplots(figsize=(4, 4))  # Tamaño ajustado
-                        sns.heatmap(cm, annot=True, fmt='g', cmap='Blues',
-                                    xticklabels=["Negativo", "Positivo"],
-                                    yticklabels=["Negativo", "Positivo"], ax=ax, annot_kws={"size": 14})
-                        ax.set_title(f"{nombre}", fontsize=10)
-                        ax.tick_params(labelsize=8)
-                        # Etiquetas manuales tipo marca de agua
-                        labels = [['TN', 'FP'], ['FN', 'TP']]
-                        for k in range(2):
-                            for l in range(2):
-                                ax.text(l + 0.5, k + 0.5, labels[k][l],
-                                        color='gray', fontsize=44, ha='center', va='center', alpha=0.3)
-                        st.pyplot(fig)
-
-######################################################################
-    # Tiempo de inferencia
-
-    elif opcion_vista == "Tiempo de inferencia":
-        import plotly.express as px
-        import pandas as pd
-
-         # Ordenar por  el menor tiempo de inferencia 
-        tiempos_ordenados = sorted(tiempos.items(), key=lambda x: x[1])
-
-        # Convertir el diccionario a DataFrame
-        df_tiempos = pd.DataFrame(tiempos_ordenados,columns=['Modelo', 'Tiempo'])
-
-        # Crear gráfico interactivo
-        fig_plotly = px.bar(
-            df_tiempos,
-            x='Modelo',
-            y='Tiempo',
-            color='Tiempo',
-            color_continuous_scale='Blues',
-            text=df_tiempos['Tiempo'].apply(lambda x: f"{x:.4f}s"),
-            title="Tiempo de predicción por modelo",
-            labels={'Tiempo': 'Segundos'}
-        )
-
-        fig_plotly.update_layout(
-            xaxis_tickangle=-45,
-            yaxis_title="Segundos",
-            coloraxis_showscale=False,
-            margin=dict(t=100)  # aumenta espacio superior
-        )
-        fig_plotly.update_traces(textposition='outside', cliponaxis=False)
-
-
-        # Mostrar en Streamlit
-        st.plotly_chart(fig_plotly, use_container_width=True)
-
+with tab1:
+    col_res, col_gauge = st.columns([1, 1])
     
+    modelo = modelos[nombre_modelo_sel]
+    pred = modelo.predict(entrada_scaled)[0]
+    try:
+        proba = modelo.predict_proba(entrada_scaled)[0]
+        prob_percent = proba[1] * 100
+    except:
+        proba = None
+        prob_percent = None
+
+    with col_res:
+        st.subheader(f"Resultado: {'🚩 Positivo' if pred == 1 else '✅ Negativo'}")
+        if pred == 1:
+            st.error("Se detecta un **alto riesgo** de evento cardiaco basado en los biomarcadores proporcionados.")
+        else:
+            st.success("Se detecta un **bajo riesgo** de evento cardiaco actual.")
+            
+        st.info(f"Modelo utilizado: **{nombre_modelo_sel}**")
+
+    with col_gauge:
+        if proba is not None:
+            fig_prob = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = prob_percent,
+                title = {'text': "Probabilidad de Riesgo (%)"},
+                gauge = {
+                    'axis': {'range': [0, 100]},
+                    'bar': {'color': "#c62828" if pred == 1 else "#00acc1"},
+                    'steps': [
+                        {'range': [0, 50], 'color': "lightgray"},
+                        {'range': [50, 100], 'color': "gray"}]
+                }
+            ))
+            fig_prob.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+            st.plotly_chart(fig_prob, use_container_width=True)
+
+with tab2:
+    st.header("🧬 Justificación Científica y Datos")
+    
+    st.markdown("""
+    ### ¿Por qué estas variables?
+    La selección de **Edad**, **CK-MB** y **Troponina** no es aleatoria. En cardiología, estas son las medidas estándar:
+    - **Troponina**: Es la proteína más específica para el corazón. Su elevación es casi sinónimo de lesión miocárdica.
+    - **CK-MB**: Se eleva rápidamente después de un infarto. Ayuda a confirmar el diagnóstico y a medir la extensión del daño.
+    
+    ### Manejo de Valores Atípicos (Outliers)
+    En situaciones de emergencia, los niveles de enzimas pueden dispararse a valores miles de veces superiores a lo normal. Para que nuestros modelos no se confundan con estos "saltos", aplicamos una **Transformación Logarítmica**. Esto permite que el modelo entienda la progresión del riesgo sin ser sesgado por valores extremos.
+    """)
+    
+    st.divider()
+    st.subheader("Distribución de Biomarcadores en la Población")
+    
+    # Aquí podríamos cargar el dataset original si existiera, o mostrar una nota.
+    # Por ahora, simularemos un gráfico comparativo del paciente actual vs valores de referencia.
+    fig_comp = go.Figure()
+    fig_comp.add_trace(go.Bar(name='Paciente', x=['Edad', 'CK-MB', 'Troponina'], y=[edad/100, ckmb/10, troponina*10])) # Escalado para visualización
+    st.plotly_chart(fig_comp, use_container_width=True)
+    st.caption("Nota: Los valores están escalados para comparación visual. Referencia clínica: Troponina < 0.04 ng/mL es usualmente normal.")
+
+with tab3:
+    st.header("📈 Rendimiento del Sistema")
+    
+    # Botón para disparar análisis técnico (ya que consume recursos)
+    if st.checkbox("Ejecutar Análisis Técnico Completo"):
+
+        resumen = []
+        tiempos = {}
+        matrices = {}
+        roc_data = {}
+
+        for nombre, modelo in modelos.items():
+            try:
+                start = time.perf_counter()
+                y_pred = modelo.predict(X_test)
+                tiempos[nombre] = time.perf_counter() - start
+
+                if hasattr(modelo, "predict_proba"):
+                    y_score = modelo.predict_proba(X_test)[:, 1]
+                elif hasattr(modelo, "decision_function"):
+                    y_score = modelo.decision_function(X_test)
+                else:
+                    y_score = None
+
+                if y_score is not None:
+                    fpr, tpr, _ = roc_curve(y_test, y_score)
+                    roc_auc = auc(fpr, tpr)
+                    roc_data[nombre] = (fpr, tpr, roc_auc)
+
+                prec = precision_score(y_test, y_pred)
+                rec = recall_score(y_test, y_pred)
+                f1 = f1_score(y_test, y_pred)
+                
+                resumen.append({
+                    "Modelo": nombre,
+                    "Accuracy": accuracy_score(y_test, y_pred),
+                    "Precision": prec,
+                    "Recall": rec,
+                    "F1-score": f1
+                })
+                matrices[nombre] = confusion_matrix(y_test, y_pred)
+            except:
+                continue
+
+        opcion_vista = st.radio(
+            "Seleccione Vista Técnica",
+            ["Métricas", "ROC", "Matrices", "Tiempos"],
+            horizontal=True
+        )
+
+        if opcion_vista == "Métricas":
+            df_res = pd.DataFrame(resumen).set_index("Modelo")
+            st.dataframe(df_res.style.format("{:.2%}").background_gradient(cmap='Blues'))
+        
+        elif opcion_vista == "ROC":
+            fig_roc = go.Figure()
+            for nombre, (fpr, tpr, roc_auc) in roc_data.items():
+                fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, name=f"{nombre} (AUC={roc_auc:.2f})"))
+            fig_roc.add_shape(type='line', line=dict(dash='dash'), x0=0, x1=1, y0=0, y1=1)
+            st.plotly_chart(fig_roc, use_container_width=True)
+            
+        elif opcion_vista == "Matrices":
+            # (Mantener lógica de matrices pero simplificada)
+            for nombre, cm in matrices.items():
+                st.write(f"**{nombre}**")
+                # Gráfico simplificado
+                fig_cm = px.imshow(cm, text_auto=True, color_continuous_scale='Blues')
+                st.plotly_chart(fig_cm, use_container_width=True)
+
+        elif opcion_vista == "Tiempos":
+            df_t = pd.DataFrame(tiempos.items(), columns=['Modelo', 'Segundos'])
+            st.plotly_chart(px.bar(df_t, x='Modelo', y='Segundos', color='Segundos'), use_container_width=True)
+
 st.markdown("")
 st.markdown("")
 
 with st.expander("**Conclusión:**", expanded=False):
-
     st.markdown("""
-    
     <div style='text-align: justify; margin-bottom: 30px;'>
     Esta aplicación es una herramienta interactiva para la <b>predicción de ataques cardíacos</b>. 
     Permite evaluar el riesgo cardiovascular de los pacientes de manera rápida y precisa, facilitando la toma de decisiones informadas en el ámbito clínico. 
